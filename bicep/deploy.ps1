@@ -20,7 +20,7 @@ function Get-RandomPassword {
  
     return (-join $result)
 }
-$pw = Get-RandomPassword 12
+$pw = Get-RandomPassword 50
 
 
 az group create --name $rgName --location eastus

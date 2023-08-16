@@ -5,6 +5,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using MongoDB.Bson;
 using MongoDB.Driver;
+using S2T2CosmosDB.Function.Functions;
 
 [assembly: FunctionsStartup(typeof(S2T2CosmosDB.Function.Startup))]
 
@@ -16,8 +17,23 @@ namespace S2T2CosmosDB.Function
 
         public override void Configure(IFunctionsHostBuilder builder)
         {
-
+            builder.Services.AddOptions<SpeechOptions>()
+                .Configure<IConfiguration>((settings, configuration) =>
+                {
+                    configuration.GetSection("Speech").Bind(settings);
+                });
             
+            builder.Services.AddOptions<AudioOptions>()
+                .Configure<IConfiguration>((settings, configuration) =>
+                {
+                    configuration.GetSection("Audio").Bind(settings);
+                });
+
+            builder.Services.AddOptions<TranscriptOptions>()
+                .Configure<IConfiguration>((settings, configuration) =>
+                {
+                    configuration.GetSection("Transcript").Bind(settings);
+                });
 
             builder.Services.AddSingleton(p =>
             {

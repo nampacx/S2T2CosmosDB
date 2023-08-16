@@ -8,7 +8,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
 
-namespace S2T2CosmosDB.Function
+namespace S2T2CosmosDB.Function.Functions
 {
     public static class TestTrigger
     {

@@ -44,10 +44,13 @@ resource storageAccount 'Microsoft.Storage/storageAccounts@2022-05-01' = {
   }
 }
 
-resource container 'Microsoft.Storage/storageAccounts/blobServices/containers@2022-05-01' = {
-  name: '${storageAccount.name}/default/${containerName}'
+resource audioBlobContainer 'Microsoft.Storage/storageAccounts/blobServices/containers@2022-05-01' = {
+  name: '${storageAccount.name}/default/audio'
 }
 
+resource transcriptBlobContainer 'Microsoft.Storage/storageAccounts/blobServices/containers@2022-05-01' = {
+  name: '${storageAccount.name}/default/transcript'
+}
 
 resource hostingPlan 'Microsoft.Web/serverfarms@2021-03-01' = {
   name: hostingPlanName
@@ -207,18 +210,57 @@ resource kv 'Microsoft.KeyVault/vaults@2021-11-01-preview' = {
   }
 }
 
-resource secret 'Microsoft.KeyVault/vaults/secrets@2021-11-01-preview' = {
-  parent: kv
-  name: 'cosmosDbAdminPassword'
-  properties: {
-    value: cdbAdminPassword
-  }
-}
-
 resource comosdbConnectionString 'Microsoft.KeyVault/vaults/secrets@2021-11-01-preview' = {
   parent: kv
   name: 'CossmosDbConnectionString'
   properties: {
     value: 'mongodb+srv://${adminUsername}:${cdbAdminPassword}@mongovnext-xeefao6iooaou.mongocluster.cosmos.azure.com/?tls=true&authMechanism=SCRAM-SHA-256&retrywrites=false&maxIdleTimeMS=120000'
+  }
+}
+
+@description('That name is the name of our application. It has to be unique.Type a name followed by your resource group name. (<name>-<resourceGroupName>)')
+param cognitiveServiceName string = 'CognitiveService-${uniqueString(resourceGroup().id)}'
+
+@allowed([
+  'S0'
+])
+param sku string = 'S0'
+
+resource cognitiveService 'Microsoft.CognitiveServices/accounts@2021-10-01' = {
+  name: cognitiveServiceName
+  location: location
+  identity: {
+    type: 'SystemAssigned'
+  }
+  sku: {
+    name: sku
+  }
+  kind: 'SpeechServices'
+  properties: {
+    apiProperties: {
+      statisticsEnabled: false
+    }
+  }
+}
+
+resource speachServiceEndpoint 'Microsoft.KeyVault/vaults/secrets@2021-11-01-preview' = {
+  parent: kv
+  name: 'speachServiceEndpoint'
+  properties: {
+    value: cognitiveService.properties.endpoint
+  }
+}
+
+resource roleDefinitionStorageBlobDataReader 'Microsoft.Authorization/roleDefinitions@2018-01-01-preview' existing = {
+  name: '2a2b9908-6ea1-4ae2-8e65-a410df84e7d1'
+}
+
+resource roleAssignmentStorage 'Microsoft.Authorization/roleAssignments@2020-10-01-preview' = {
+  scope: storageAccount
+  name: guid(storageAccount.id, cognitiveService.id, roleDefinitionStorageBlobDataReader.id)
+  properties: {
+    principalId:      cognitiveService.identity.principalId
+    roleDefinitionId: roleDefinitionStorageBlobDataReader.id
+    principalType:    'ServicePrincipal'
   }
 }
