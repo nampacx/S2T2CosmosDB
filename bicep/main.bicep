@@ -23,7 +23,6 @@ param appInsightsLocation string = 'WestEurope'
 ])
 param runtime string = 'dotnet'
 
-var containerName = 'myblobcontainer'
 var keyVaultName = '${uniqueString(resourceGroup().id)}kv'
 var functionAppName = appName
 var hostingPlanName = appName
@@ -72,38 +71,36 @@ resource functionApp 'Microsoft.Web/sites@2021-03-01' = {
   properties: {
     serverFarmId: hostingPlan.id
     siteConfig: {
-      appSettings: [
-        {
-          name: 'AzureWebJobsStorage'
-          value: 'DefaultEndpointsProtocol=https;AccountName=${storageAccountName};EndpointSuffix=${environment().suffixes.storage};AccountKey=${storageAccount.listKeys().keys[0].value}'
-        }
-        {
-          name: 'WEBSITE_CONTENTAZUREFILECONNECTIONSTRING'
-          value: 'DefaultEndpointsProtocol=https;AccountName=${storageAccountName};EndpointSuffix=${environment().suffixes.storage};AccountKey=${storageAccount.listKeys().keys[0].value}'
-        }
-        {
-          name: 'WEBSITE_CONTENTSHARE'
-          value: toLower(functionAppName)
-        }
-        {
-          name: 'FUNCTIONS_EXTENSION_VERSION'
-          value: '~4'
-        }
-        {
-          name: 'APPINSIGHTS_INSTRUMENTATIONKEY'
-          value: applicationInsights.properties.InstrumentationKey
-        }
-        {
-          name: 'FUNCTIONS_WORKER_RUNTIME'
-          value: functionWorkerRuntime
-        }
-      ]
       ftpsState: 'FtpsOnly'
       minTlsVersion: '1.2'
     }
     httpsOnly: true
   }
 }
+
+resource cosmosDbConnectionStringSetting 'Microsoft.Web/sites/config@2022-03-01' = {
+  name: 'appsettings'
+  kind: 'string'
+  parent: functionApp
+  properties: {
+    'MongoDB:ConnectionString': '@Microsoft.KeyVault(SecretUri=${kv.properties.vaultUri}secrets/${comosdbConnectionString.name}/)'
+    AzureWebJobsStorage: 'DefaultEndpointsProtocol=https;AccountName=${storageAccountName};EndpointSuffix=${environment().suffixes.storage};AccountKey=${storageAccount.listKeys().keys[0].value}'
+    'Audio:StorageAccountConnectionString': 'DefaultEndpointsProtocol=https;AccountName=${storageAccountName};EndpointSuffix=${environment().suffixes.storage};AccountKey=${storageAccount.listKeys().keys[0].value}'
+    'Transcript:StorageAccountConnectionString': 'DefaultEndpointsProtocol=https;AccountName=${storageAccountName};EndpointSuffix=${environment().suffixes.storage};AccountKey=${storageAccount.listKeys().keys[0].value}'
+    WEBSITE_CONTENTAZUREFILECONNECTIONSTRING: 'DefaultEndpointsProtocol=https;AccountName=${storageAccountName};EndpointSuffix=${environment().suffixes.storage};AccountKey=${storageAccount.listKeys().keys[0].value}'
+    WEBSITE_CONTENTSHARE: toLower(functionAppName)
+    FUNCTIONS_EXTENSION_VERSION: '~4'
+    APPINSIGHTS_INSTRUMENTATIONKEY: applicationInsights.properties.InstrumentationKey
+    FUNCTIONS_WORKER_RUNTIME: functionWorkerRuntime
+    'Speech:Region': cognitiveService.location
+    'Speech:Key': ''
+    'MongoDB:Database': 'sample'
+    'MongoDB:Collection': 'sample'
+    'Audio:ContainerName': 'audio'
+    'Transcript:ContainerName': 'transcript'
+  }
+}
+
 
 resource applicationInsights 'Microsoft.Insights/components@2020-02-02' = {
   name: applicationInsightsName
@@ -118,7 +115,6 @@ resource applicationInsights 'Microsoft.Insights/components@2020-02-02' = {
 @description('Azure Cosmos DB MongoDB vCore cluster name')
 @maxLength(44)
 param clusterName string = 'mongovnext-${uniqueString(resourceGroup().id)}'
-
 
 @description('Username for admin user')
 param adminUsername string = 'cdbAdmin'
@@ -136,13 +132,13 @@ resource cluster 'Microsoft.DocumentDB/mongoClusters@2022-10-15-preview' = {
     administratorLogin: adminUsername
     administratorLoginPassword: cdbAdminPassword
     nodeGroupSpecs: [
-        {
-            kind: 'Shard'
-            nodeCount: 1
-            sku: 'M40'
-            diskSizeGB: 128
-            enableHa: false
-        }
+      {
+        kind: 'Shard'
+        nodeCount: 1
+        sku: 'M40'
+        diskSizeGB: 128
+        enableHa: false
+      }
     ]
   }
 }
@@ -180,7 +176,7 @@ param secretsPermissions array = [
 ])
 param skuName string = 'standard'
 
-resource kv 'Microsoft.KeyVault/vaults@2021-11-01-preview' = {
+resource kv 'Microsoft.KeyVault/vaults@2022-07-01' = {
   name: keyVaultName
   location: location
   properties: {
@@ -259,8 +255,8 @@ resource roleAssignmentStorage 'Microsoft.Authorization/roleAssignments@2020-10-
   scope: storageAccount
   name: guid(storageAccount.id, cognitiveService.id, roleDefinitionStorageBlobDataReader.id)
   properties: {
-    principalId:      cognitiveService.identity.principalId
+    principalId: cognitiveService.identity.principalId
     roleDefinitionId: roleDefinitionStorageBlobDataReader.id
-    principalType:    'ServicePrincipal'
+    principalType: 'ServicePrincipal'
   }
 }

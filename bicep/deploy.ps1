@@ -1,4 +1,5 @@
 $rgName = "rg-stttcosmosdb-test"
+$rgLocation = "eastus"
 
 function Get-RandomPassword {
     param (
@@ -23,5 +24,5 @@ function Get-RandomPassword {
 $pw = Get-RandomPassword 50
 
 
-az group create --name $rgName --location eastus
+az group create --name $rgName --location $rgLocation
 az deployment group create --resource-group $rgName --template-file main.bicep --parameters cdbAdminPassword=$pw
