@@ -24,6 +24,7 @@ param appInsightsLocation string = 'WestEurope'
 param runtime string = 'dotnet'
 
 var containerName = 'myblobcontainer'
+var keyVaultName = '${uniqueString(resourceGroup().id)}kv'
 var functionAppName = appName
 var hostingPlanName = appName
 var applicationInsightsName = appName
@@ -108,5 +109,116 @@ resource applicationInsights 'Microsoft.Insights/components@2020-02-02' = {
   properties: {
     Application_Type: 'web'
     Request_Source: 'rest'
+  }
+}
+
+@description('Azure Cosmos DB MongoDB vCore cluster name')
+@maxLength(44)
+param clusterName string = 'mongovnext-${uniqueString(resourceGroup().id)}'
+
+
+@description('Username for admin user')
+param adminUsername string = 'cdbAdmin'
+
+@secure()
+@description('Password for admin user')
+@minLength(8)
+@maxLength(128)
+param cdbAdminPassword string
+
+resource cluster 'Microsoft.DocumentDB/mongoClusters@2022-10-15-preview' = {
+  name: clusterName
+  location: location
+  properties: {
+    administratorLogin: adminUsername
+    administratorLoginPassword: cdbAdminPassword
+    nodeGroupSpecs: [
+        {
+            kind: 'Shard'
+            nodeCount: 1
+            sku: 'M40'
+            diskSizeGB: 128
+            enableHa: false
+        }
+    ]
+  }
+}
+
+resource firewallRules 'Microsoft.DocumentDB/mongoClusters/firewallRules@2022-10-15-preview' = {
+  parent: cluster
+  name: 'AllowAllAzureServices'
+  properties: {
+    startIpAddress: '0.0.0.0'
+    endIpAddress: '0.0.0.0'
+  }
+}
+
+@description('Specifies whether Azure Virtual Machines are permitted to retrieve certificates stored as secrets from the key vault.')
+param enabledForDeployment bool = false
+
+@description('Specifies whether Azure Disk Encryption is permitted to retrieve secrets from the vault and unwrap keys.')
+param enabledForDiskEncryption bool = false
+
+@description('Specifies whether Azure Resource Manager is permitted to retrieve secrets from the key vault.')
+param enabledForTemplateDeployment bool = false
+
+@description('Specifies the Azure Active Directory tenant ID that should be used for authenticating requests to the key vault. Get it by using Get-AzSubscription cmdlet.')
+param tenantId string = subscription().tenantId
+
+@description('Specifies the permissions to secrets in the vault. Valid values are: all, get, list, set, delete, backup, restore, recover, and purge.')
+param secretsPermissions array = [
+  'get'
+]
+
+@description('Specifies whether the key vault is a standard vault or a premium vault.')
+@allowed([
+  'standard'
+  'premium'
+])
+param skuName string = 'standard'
+
+resource kv 'Microsoft.KeyVault/vaults@2021-11-01-preview' = {
+  name: keyVaultName
+  location: location
+  properties: {
+    enabledForDeployment: enabledForDeployment
+    enabledForDiskEncryption: enabledForDiskEncryption
+    enabledForTemplateDeployment: enabledForTemplateDeployment
+    tenantId: tenantId
+    enableSoftDelete: true
+    softDeleteRetentionInDays: 90
+    accessPolicies: [
+      {
+        objectId: functionApp.identity.principalId
+        tenantId: tenantId
+        permissions: {
+          secrets: secretsPermissions
+        }
+      }
+    ]
+    sku: {
+      name: skuName
+      family: 'A'
+    }
+    networkAcls: {
+      defaultAction: 'Allow'
+      bypass: 'AzureServices'
+    }
+  }
+}
+
+resource secret 'Microsoft.KeyVault/vaults/secrets@2021-11-01-preview' = {
+  parent: kv
+  name: 'cosmosDbAdminPassword'
+  properties: {
+    value: cdbAdminPassword
+  }
+}
+
+resource comosdbConnectionString 'Microsoft.KeyVault/vaults/secrets@2021-11-01-preview' = {
+  parent: kv
+  name: 'CossmosDbConnectionString'
+  properties: {
+    value: 'mongodb+srv://${adminUsername}:${cdbAdminPassword}@mongovnext-xeefao6iooaou.mongocluster.cosmos.azure.com/?tls=true&authMechanism=SCRAM-SHA-256&retrywrites=false&maxIdleTimeMS=120000'
   }
 }
