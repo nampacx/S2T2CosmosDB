@@ -69,7 +69,13 @@ namespace S2T2CosmosDB.Function.Functions
                 response = await client.ExecuteAsync(statusRequest);
                 log.LogInformation($"Transcription started: {response.StatusCode}");
                 transcriptionResponse = JsonConvert.DeserializeObject<TranscriptResponse>(response.Content);
-            } while (transcriptionResponse.status != "Succeeded");
+            } while (transcriptionResponse.status != "Succeeded" && transcriptionResponse.status != "Failed");
+
+            if(transcriptionResponse.status == "Failed")
+            {
+                log.LogError($"Transcription failed: {response.Content}");
+                return;
+            }
 
             var filesRequest = new RestRequest(transcriptionResponse.links.files.AbsolutePath);
             filesRequest.AddHeader(SpeechKeyHeaderName, _speechOptions.Key);
@@ -78,7 +84,7 @@ namespace S2T2CosmosDB.Function.Functions
 
             var fileResponse = JsonConvert.DeserializeObject<FilesResponse>(response.Content);
             var dateTimeString = DateTime.Now.ToString("yyyy_MM_dd_hh_mm_ss");
-            foreach (var item in fileResponse.values)
+            foreach (var item in fileResponse.values.Where(v => v.kind == "Transcription"))
             {
                 var blobName = $"{name.Replace(".", "_")}_{item.kind}_${dateTimeString}.json";
                 log.LogInformation($"File: {blobName}");

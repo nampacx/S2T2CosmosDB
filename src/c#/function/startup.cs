@@ -37,9 +37,9 @@ namespace S2T2CosmosDB.Function
 
             builder.Services.AddSingleton(p =>
             {
-                var connectionString = _config.GetValue<string>("CosmosDbConnectionString");
-                var database = _config.GetValue<string>("MongoDBDatabase");
-                var collection = _config.GetValue<string>("MongoDBCollection");
+                var connectionString = _config.GetValue<string>("MongoDB:ConnectionString");
+                var database = _config.GetValue<string>("MongoDB:Database");
+                var collection = _config.GetValue<string>("MongoDB:Collection");
                 return new MongoClient(connectionString).GetDatabase(database).GetCollection<BsonDocument>(collection);
             });
         }
